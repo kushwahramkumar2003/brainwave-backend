@@ -262,7 +262,11 @@ export const queryContent = async (
 
     console.log("Query embedding:", queryEmbedding);
 
-    const relevantContent = await searchVectorDatabase(queryEmbedding, userId);
+    const relevantContent = await searchVectorDatabase(
+      queryEmbedding,
+      userId,
+      1
+    );
 
     console.log("Relevant content:", relevantContent);
 

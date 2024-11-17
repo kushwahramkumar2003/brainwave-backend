@@ -98,7 +98,9 @@ export async function fetchWebpageContent(link: string): Promise<string> {
 }
 
 function extractTweetId(url: string): string | null {
-  const match = url.match(/twitter\.com\/\w+\/status\/(\d+)/);
+  const match = url.match(
+    /(?:https?:\/\/)?(?:www\.)?(?:x\.com|twitter\.com)\/\w+\/status\/(\d+)/
+  );
   return match ? match[1] : null;
 }
 
