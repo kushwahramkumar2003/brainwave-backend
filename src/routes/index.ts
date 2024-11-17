@@ -7,6 +7,7 @@ import {
   deleteUserContent,
   getAllUserContent,
   getUserBrainByShareLink,
+  queryContent,
 } from "../controllers/content";
 import { validateRequest } from "../middleware/validateRequest";
 import { LoginSchema, SignupSchema } from "../schemas/auth";
@@ -39,6 +40,7 @@ router.post(
   validateRequest(ShareLinkSchema),
   createOrDisableSharableLink
 );
-router.get("/brain/:shareLink", getUserBrainByShareLink);
+router.get("/brain/:shareLink", authMiddleware, getUserBrainByShareLink);
+router.post("/brain/query", authMiddleware, queryContent);
 
 export default router;

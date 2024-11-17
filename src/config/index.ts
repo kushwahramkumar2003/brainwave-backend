@@ -11,6 +11,7 @@ const config = {
   PINECONE_INDEX_NAME: process.env.PINECONE_INDEX_NAME || "",
   REDIS_URL: process.env.REDIS_URL || "",
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
+  HUGGINGFACE_API_KEY: process.env.HUGGINGFACE_API_KEY || "",
 };
 
 export default config;

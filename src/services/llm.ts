@@ -1,8 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { HfInference } from "@huggingface/inference";
 import config from "../config";
 import { decode, encode } from "gpt-3-encoder";
 
-const anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
+const hf = new HfInference(config.HUGGINGFACE_API_KEY);
 
 type CacheEntry = {
   response: string;
@@ -27,7 +27,7 @@ interface ContentItem {
 interface QueryOptions {
   maxTokens?: number;
   temperature?: number;
-  model?: string; // "claude-3-haiku-20240307";
+  model?: string;
   cacheEnabled?: boolean;
   maxContextTokens?: number;
   forceFresh?: boolean;
@@ -36,7 +36,7 @@ interface QueryOptions {
 const DEFAULT_OPTIONS: Required<QueryOptions> = {
   maxTokens: 250,
   temperature: 0.7,
-  model: "claude-3-haiku-20240307",
+  model: "gpt2",
   cacheEnabled: true,
   maxContextTokens: 800,
   forceFresh: false,
@@ -84,8 +84,7 @@ async function rateLimit(): Promise<void> {
 export async function queryLLM(
   query: string,
   relevantContent: ContentItem[],
-  options: QueryOptions = {},
-  retries: number = 2
+  options: QueryOptions = {}
 ): Promise<string> {
   try {
     resetDailyTokenCount();
@@ -109,12 +108,12 @@ export async function queryLLM(
         return acc;
       }, []);
 
-    const context: string = optimizedContent
-      .map(({ metadata: { type, text } }) => `${type}: ${text}`)
-      .join("\n\n");
+    const contextItems: string[] = optimizedContent.map(
+      ({ metadata: { type, text } }) => `[${type.toUpperCase()}]: ${text}`
+    );
 
     const truncatedContext: string = truncateToTokenLimit(
-      context,
+      contextItems.join("\n\n"),
       maxContextTokens
     );
 
@@ -130,108 +129,67 @@ export async function queryLLM(
       }
     }
 
-    const estimatedTokens: number =
-      countTokens(truncatedContext) + countTokens(query) + maxTokens;
+    const inputTokens: number =
+      countTokens(truncatedContext) + countTokens(query);
+    const estimatedTokens: number = inputTokens + maxTokens;
+    if (inputTokens + maxTokens > 1024) {
+      return `Input validation error: inputs tokens + max_new_tokens must be <= 1024. Given: ${inputTokens} inputs tokens and ${maxTokens} max_new_tokens`;
+    }
     if (dailyTokenCount + estimatedTokens > DAILY_TOKEN_LIMIT) {
       return "Daily API quota limit reached. Please try again tomorrow or use cached responses only.";
     }
 
     await rateLimit();
 
-    const systemPrompt: string =
-      "Provide very concise answers based on the context provided. Keep responses brief and focused.";
+    const prompt: string = `You are an AI assistant with access to a knowledge base containing various types of content such as documents, tweets, YouTube videos, and web links. Your task is to provide a comprehensive and accurate response to the user's question based on the following context:
 
-    const completion = await anthropic.messages.create({
+${truncatedContext}
+
+Please consider the following guidelines:
+1. Analyze the provided context carefully and identify the most relevant information.
+2. If the context contains multiple content types, synthesize information from different sources.
+3. Provide a clear and concise answer that directly addresses the user's question.
+4. If the context doesn't contain enough information to fully answer the question, state this clearly and provide the best possible response based on available information.
+5. If appropriate, mention the types of sources you're using (e.g., "According to a tweet in the context..." or "Based on a document in the knowledge base...").
+
+User's Question: ${query}
+
+Response:`;
+
+    const response = await hf.textGeneration({
       model,
-      max_tokens: maxTokens,
-      temperature,
-      messages: [
-        {
-          role: "user",
-          content: `${systemPrompt}\n\nContext:\n${truncatedContext}\n\nQuestion: ${query}\n\nProvide a brief response.`,
-        },
-      ],
+      inputs: prompt,
+      parameters: {
+        max_new_tokens: maxTokens,
+        temperature,
+        return_full_text: false,
+      },
     });
 
-    const response: string =
-      //@ts-ignore
-      completion.content?.[0]?.text || "Sorry, I couldn't generate a response.";
+    const responseText: string =
+      response.generated_text || "Sorry, I couldn't generate a response.";
 
-    const responseTokens: number = countTokens(response);
+    const responseTokens: number = countTokens(responseText);
     dailyTokenCount += estimatedTokens;
 
     if (cacheEnabled) {
       const cacheKey: string = getCacheKey(query, truncatedContext);
       responseCache.set(cacheKey, {
-        response,
+        response: responseText,
         timestamp: Date.now(),
         tokenCount: responseTokens,
       });
     }
 
-    return response;
+    return responseText;
   } catch (error: unknown) {
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      ("status" in error || "error" in error)
-    ) {
-      const err = error as any;
-      if (err.status === 429 || err.error?.type === "rate_limit_exceeded") {
-        if (retries > 0) {
-          console.warn(
-            `Rate/quota limit hit. Retrying with more aggressive caching...`
-          );
-
-          return queryLLM(
-            query,
-            relevantContent,
-            {
-              ...options,
-              maxTokens: Math.floor(options.maxTokens! * 0.7),
-              maxContextTokens: Math.floor(options.maxContextTokens! * 0.7),
-              cacheEnabled: true,
-            },
-            retries - 1
-          );
-        }
-
-        const similarResponse: string | null = findSimilarCachedResponse(query);
-        if (similarResponse) {
-          return `(Cached similar response due to API limits): ${similarResponse}`;
-        }
-      }
-    }
-
-    console.error("Error querying Claude:", error);
+    console.error("Error querying Hugging Face LLM:", error);
     throw new Error(
       `Failed to generate response: ${
         (error as any)?.error?.message || (error as Error).message
       }`
     );
   }
-}
-
-function findSimilarCachedResponse(query: string): string | null {
-  const queryWords: Set<string> = new Set(query.toLowerCase().split(/\W+/));
-  let bestMatch: string | null = null;
-  let highestOverlap: number = 0;
-
-  for (const key of responseCache.keys()) {
-    const cacheWords: Set<string> = new Set(key.toLowerCase().split(/\W+/));
-    const overlap: number = [...queryWords].filter((word) =>
-      cacheWords.has(word)
-    ).length;
-    if (overlap > highestOverlap) {
-      highestOverlap = overlap;
-      bestMatch = key;
-    }
-  }
-
-  if (bestMatch && highestOverlap >= 2) {
-    return responseCache.get(bestMatch)?.response || null;
-  }
-  return null;
 }
 
 export function cleanupCache(): void {

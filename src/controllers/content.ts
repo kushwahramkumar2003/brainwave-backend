@@ -34,6 +34,7 @@ export const addNewContent = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    console.log("Request body:", req.body);
     const { link, type, title, tags } = AddContentSchema.parse(req).body;
 
     const userId = req.userId;
@@ -52,6 +53,8 @@ export const addNewContent = async (
         return tag._id;
       })
     );
+
+    console.log("Tag IDs:", tagIds);
 
     const content = new Content({
       link,
@@ -109,7 +112,6 @@ export const getAllUserContent = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    //@ts-ignore
     const userId = req.userId;
 
     const userContent = await Content.find({ userId }).populate({
@@ -139,7 +141,6 @@ export const deleteUserContent = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    //@ts-ignore
     const userId = req.userId;
     const { contentId } = DeleteContentSchema.parse(req).body;
 
@@ -166,7 +167,6 @@ export const createOrDisableSharableLink = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    //@ts-ignore
     const userId = req.userId;
     const { share } = ShareLinkSchema.parse(req).body;
 
@@ -252,25 +252,26 @@ export const queryContent = async (
       throw new CustomError("User not authenticated", 401);
     }
 
-    // Check cache
     const cachedResponse = await cacheGet(`query:${userId}:${query}`);
     if (cachedResponse) {
       res.status(200).json({ response: cachedResponse });
       return;
     }
 
-    // Generate query embedding
     const queryEmbedding = await generateEmbedding(query);
 
-    // Search vector database
+    console.log("Query embedding:", queryEmbedding);
+
     const relevantContent = await searchVectorDatabase(queryEmbedding, userId);
 
-    // Query LLM
+    console.log("Relevant content:", relevantContent);
+
     //@ts-ignore
     const llmResponse = await queryLLM(query, relevantContent);
 
-    // Cache response
-    await cacheSet(`query:${userId}:${query}`, llmResponse, 3600); // Cache for 1 hour
+    console.log("LLM response:", llmResponse);
+
+    await cacheSet(`query:${userId}:${query}`, llmResponse, 3600);
 
     res.status(200).json({ response: llmResponse });
   } catch (error) {

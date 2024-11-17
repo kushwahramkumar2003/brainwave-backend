@@ -50,6 +50,7 @@ export async function fetchYoutubeTranscript(link: string): Promise<string> {
       throw new Error("Invalid YouTube URL");
     }
 
+    console.log("Fetching YouTube transcript for video ID:", videoId);
     const transcriptList = await YoutubeTranscript.fetchTranscript(videoId);
 
     const fullTranscript = transcriptList
