@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Response, Request } from "express";
 import connectDb from "./utils/connectDB";
 import router from "./routes";
 import { errorHandler } from "./middleware/errorHandler";
@@ -10,6 +10,12 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/api/v1", router);
+app.use("/health", (req: Request, res: Response) => {
+  res.json({
+    status: "ok",
+    message: "Server is running",
+  });
+});
 
 //@ts-ignore
 app.use(errorHandler);
