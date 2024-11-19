@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction, CookieOptions } from "express";
 import User from "../models/User";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -58,9 +58,45 @@ export const login = async (
       expiresIn: "1d",
     });
 
+    const options: CookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 24 * 10 * 60 * 60 * 1000,
+    };
+
+    res.cookie("token", token, options);
+
     res.status(200).json({
       message: "User logged in successfully",
-      token,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const authCheck = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    console.log(req.userId);
+    const user = await User.findById(req.userId).select("username -_id");
+
+    if (!user) {
+      res.status(404).json({
+        message: "User not found",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Access granted",
+      user: {
+        username: user.username,
+        id: req.userId,
+      },
     });
   } catch (error) {
     next(error);

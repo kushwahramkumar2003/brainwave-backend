@@ -3,7 +3,7 @@ import { z } from "zod";
 
 const ContentSchema = z.object({
   link: z.string().url(),
-  type: z.enum(["document", "tweet", "youtube", "link"]),
+  type: z.enum(["document", "tweet", "youtube", "link", "video"]),
   title: z.string().min(1),
   tags: z.array(z.string()),
   userId: z.string(),
@@ -16,18 +16,20 @@ interface ContentDocument
     Document {
   tags: Types.ObjectId[];
   userId: Types.ObjectId;
+  createdAt: Date;
 }
 
 const ContentModel = new Schema<ContentDocument>({
   link: { type: String, required: true },
   type: {
     type: String,
-    enum: ["document", "tweet", "youtube", "link"],
+    enum: ["document", "tweet", "youtube", "link", "video"],
     required: true,
   },
   title: { type: String, required: true },
   tags: [{ type: Schema.Types.ObjectId, ref: "Tag", required: true }], // Changed to Schema.Types.ObjectId
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true }, // Changed to Schema.Types.ObjectId
+  createdAt: { type: Date, default: Date.now },
 });
 
 const Content = model<ContentDocument>("Content", ContentModel);

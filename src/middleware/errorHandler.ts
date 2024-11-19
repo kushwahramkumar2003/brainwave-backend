@@ -9,6 +9,14 @@ export const errorHandler = (
 ) => {
   console.error(err);
 
+  if (
+    err instanceof CustomError &&
+    err.statusCode === 401 &&
+    err.message === "Invalid token"
+  ) {
+    return res.redirect("/login");
+  }
+
   if (err instanceof CustomError) {
     return res.status(err.statusCode).json({
       error: {

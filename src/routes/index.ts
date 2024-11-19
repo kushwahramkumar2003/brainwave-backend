@@ -1,5 +1,5 @@
 import express from "express";
-import { login, signup } from "../controllers/auth";
+import { authCheck, login, signup } from "../controllers/auth";
 import { authMiddleware } from "../middleware";
 import {
   addNewContent,
@@ -20,6 +20,7 @@ import {
 const router = express.Router();
 
 router.post("/signup", validateRequest(SignupSchema), signup);
+router.get("/auth/me", authMiddleware, authCheck);
 router.post("/signin", validateRequest(LoginSchema), login);
 router.post(
   "/content",

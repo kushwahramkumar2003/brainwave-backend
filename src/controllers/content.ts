@@ -113,11 +113,19 @@ export const getAllUserContent = async (
 ): Promise<void> => {
   try {
     const userId = req.userId;
+    const type = req.query.type as string | undefined;
 
-    const userContent = await Content.find({ userId }).populate({
-      path: "tags",
-      select: "title",
-    });
+    const filter: any = { userId };
+    if (type) {
+      filter.type = type;
+    }
+
+    const userContent = await Content.find(filter)
+      .populate({
+        path: "tags",
+        select: "title",
+      })
+      .sort({ createdAt: -1 });
 
     const formattedContent = userContent.map((content) => ({
       id: content._id,
@@ -125,6 +133,7 @@ export const getAllUserContent = async (
       link: content.link,
       title: content.title,
       tags: content.tags.map((tag: any) => tag.title),
+      createdAt: content.createdAt,
     }));
 
     res.status(200).json({
