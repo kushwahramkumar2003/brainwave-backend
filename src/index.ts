@@ -21,6 +21,12 @@ app.use(
       callback(null, isAllowed);
     },
     credentials: true,
+    exposedHeaders: [
+      "set-cookie",
+      "Content-Disposition",
+      "Content-Type",
+      "Content-Length",
+    ],
   })
 );
 app.use(cookieParser());
