@@ -90,7 +90,7 @@ export const addNewContent = async (
     await storeVectorEmbedding(content._id as string, embedding, {
       userId,
       type,
-      text: textForEmbedding.substring(0, 1500), // Store first 1000 characters as metadata
+      text: textForEmbedding.substring(0, 1500),
     });
 
     const populatedContent = await Content.findById(content._id).populate(
@@ -287,6 +287,81 @@ export const queryContent = async (
     await cacheSet(`query:${userId}:${query}`, llmResponse, 3600);
 
     res.status(200).json({ response: llmResponse });
+  } catch (error) {
+    next(error);
+  }
+};
+export const importContentFromBrain = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.userId;
+
+    const { contentId } = req.body;
+
+    if (!contentId) {
+      throw new CustomError("Content ID is required", 400);
+    }
+
+    if (!userId) {
+      throw new CustomError("User not authenticated", 401);
+    }
+
+    const userId2 = await Content.findOne({ _id: contentId }).select("userId");
+    console.log("User ID 2:", userId2);
+    if (!userId2) {
+      throw new CustomError("Content not found", 404);
+    }
+
+    if (userId2._id === userId) {
+      throw new CustomError("Unauthorized to import content", 403);
+    }
+
+    const link = await Link.findOne({ userId: userId2.userId });
+    console.log("Link:", link);
+    if (!link) {
+      throw new CustomError("Content not shared", 404);
+    }
+
+    const content = await Content.findById(contentId);
+    console.log("Content:", content);
+    if (!content) {
+      throw new CustomError("Content not found", 404);
+    }
+
+    let textForEmbedding = "";
+    switch (content.type) {
+      case "tweet":
+        textForEmbedding = await fetchTweetContent(content.link);
+        break;
+      case "youtube":
+        textForEmbedding = await fetchYoutubeTranscript(content.link);
+        break;
+      case "document":
+      case "link":
+        textForEmbedding = await fetchWebpageContent(content.link);
+        break;
+    }
+    console.log("Text for embedding:", textForEmbedding);
+    const embedding = await generateEmbedding(textForEmbedding);
+    console.log("Embedding:", embedding);
+    await storeVectorEmbedding(content._id as string, embedding, {
+      userId,
+      type: content.type,
+      text: textForEmbedding.substring(0, 1500),
+    });
+
+    await new Content({
+      link: content.link,
+      type: content.type,
+      title: content.title,
+      tags: content.tags,
+      userId,
+    }).save();
+
+    res.status(200).json({ response: "Content imported successfully" });
   } catch (error) {
     next(error);
   }

@@ -7,6 +7,7 @@ import {
   deleteUserContent,
   getAllUserContent,
   getUserBrainByShareLink,
+  importContentFromBrain,
   queryContent,
 } from "../controllers/content";
 import { validateRequest } from "../middleware/validateRequest";
@@ -43,5 +44,6 @@ router.post(
 );
 router.get("/brain/:shareLink", authMiddleware, getUserBrainByShareLink);
 router.post("/brain/query", authMiddleware, queryContent);
+router.post("/brain/content/import", authMiddleware, importContentFromBrain);
 
 export default router;
